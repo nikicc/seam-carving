@@ -277,12 +277,12 @@ def seam_carve(img, dw=0, dh=0):
 
 
 if __name__ == "__main__":
-    FILE = os.path.join('img', 'nature_256.png')
+    FILE = os.path.join('img', 'nature_512.png')
     image = mpimg.imread(FILE)
     original = np.copy(image)
 
     print("Original image shape:", image.shape)
-    image, eng, path = seam_carve(image, dw=30, dh=10)
+    image, eng, path = seam_carve(image, dw=10, dh=0)
     print("\rFinal image shape:", image.shape)
 
     # plot

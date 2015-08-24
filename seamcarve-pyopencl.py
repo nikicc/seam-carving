@@ -36,21 +36,22 @@ def get_energy_image(img):
     :param img: Input image
     :return: The discrete derivatives for each pixel.
     """
-    height, width = img.shape[:2]
-    energy = np.zeros((height, width))
+    #height, width = img.shape[:2]
+    #energy = np.zeros((height, width))
 
-    example.opencl_energy(img)
-    import sys
-    sys.exit(-1)
+    #for h in range(height):
+    #    for w in range(width):
+    #        w_l = max(0, w-1)
+    #        w_r = min(w+1, width-1)
+    #        h_u = max(0, h-1)
+    #        h_d = min(h+1, height-1)
+    #        energy[h, w] = sum(abs(img[h_u, w, :] - img[h_d, w, :])) + \
+    #                       sum(abs(img[h, w_l, :] - img[h, w_r, :]))
 
-        #for w in range(width):
-            #w_l = max(0, w-1)
-            #w_r = min(w+1, width-1)
-            #h_u = max(0, h-1)
-            #h_d = min(h+1, height-1)
-            #energy[h, w] = sum(abs(img[h_u, w, :] - img[h_d, w, :])) + \
-            #               sum(abs(img[h, w_l, :] - img[h, w_r, :]))
-    return energy
+    example = OpenCL()
+    example.loadProgram("get_energy.cl")
+    r = example.opencl_energy(img)
+    return r
 
 
 def find_seam_vertical(energy):
@@ -210,14 +211,14 @@ def seam_carve(img, dw=0, dh=0):
     if dh == 0 and dw == 0:
         return img, None, None
     elif dw == 0:   # remove just horizontal seams
-        final = dh+1
-        for i in range(dh+1):
+        final = dh
+        for i in range(dh):
             img, eng, path, _ = shrink_height(img)
             update_progress()
         return img, eng, path
     elif dh == 0:   # remove just vertical seams
-        final = dw+1
-        for i in range(dw+1):
+        final = dw
+        for i in range(dw):
             img, eng, path, _ = shrink_width(img)
             update_progress()
         return img, eng, path
@@ -280,8 +281,6 @@ def seam_carve(img, dw=0, dh=0):
         return img_map[-1, -1], None, None
 
 
-os.environ["PYOPENCL_CTX"] = "0:0"
-
 class OpenCL:
     def __init__(self):
         self.ctx = cl.create_some_context()
@@ -291,7 +290,6 @@ class OpenCL:
         #read in the OpenCL source file as a string
         f = open(filename, 'r')
         fstr = "".join(f.readlines())
-        print(fstr)
         #create the program
         self.program = cl.Program(self.ctx, fstr).build()
 
@@ -318,20 +316,23 @@ class OpenCL:
     def opencl_energy(self, img):
         mf = cl.mem_flags
 
-        self.img = img.astype(np.float32)
+        self.W = img.shape[1]
+        self.H = img.shape[0]
+
+        self.img = img.astype(np.float32).reshape(-1)
 
         self.img_buf = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=self.img)
         self.dest_buf = cl.Buffer(self.ctx, mf.WRITE_ONLY, self.img.nbytes)
 
-        self.program.part1(self.queue, self.img.shape, None, self.img_buf, self.dest_buf)
-        c = np.empty_like(self.img)
-        print(c.shape)
+        self.program.part1(self.queue, self.img.shape, None, self.img_buf, self.dest_buf, np.int32(self.H), np.int32(self.W))
+        c = np.empty(self.img.shape).astype(np.float32)
         cl.enqueue_read_buffer(self.queue, self.dest_buf, c).wait()
-        print(c)
+        c = c.reshape((self.H, self.W, 4))
+        return c[:, :, 0] + c[:, :, 1] + c[:, :, 2] + c[:, :, 3]
 
 
-example = OpenCL()
-example.loadProgram("get_energy.cl")
+os.environ["PYOPENCL_CTX"] = "0:1"
+os.environ["PYOPENCL_COMPILER_OUTPUT"] = "1"
 
 if __name__ == "__main__":
     FILE = os.path.join('img', 'nature_512.png')
@@ -339,7 +340,7 @@ if __name__ == "__main__":
     original = np.copy(image)
 
     print("Original image shape:", image.shape)
-    image, eng, path = seam_carve(image, dw=3, dh=5)
+    image, eng, path = seam_carve(image, dw=10, dh=0)
     print("\rFinal image shape:", image.shape)
 
     # plot
