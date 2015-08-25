@@ -43,3 +43,33 @@ __kernel void energy(__global float* img, __global float* res, int H, int W, int
 
     res[index] = der;
 }
+
+__kernel void find_seam(__global float* m, __global float* energy, __global float* new_m, __global float* back, int W)
+{
+    // get index
+    int w = get_global_id(0);
+
+    // "border safe" indices
+    int wl = MAX(0, w-1);
+    int wr = MIN(w+1, W-1);
+
+    // enlarge the path by one
+    float val = INFINITY;
+    int ind;
+    for(int i = 0; (i+wl) <= wr; i = i+1){
+        if(m[i + wl] < val){
+            val = m[i + wl];
+            ind = i;
+        }
+    }
+
+    // store energy
+    new_m[w] = energy[w] + val;
+
+    // store backtrack pointers
+    // special case for first element, since there is no "left"
+    if(w == 0){
+        ind += 1;
+    }
+    back[w] = ind-1;
+}
