@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from operator import itemgetter
+import pyopencl as cl
 import numpy as np
 import os
 
@@ -35,18 +36,21 @@ def get_energy_image(img):
     :param img: Input image
     :return: The discrete derivatives for each pixel.
     """
-    height, width = img.shape[:2]
-    energy = np.zeros((height, width))
+    if USE_PYOPENCL_IMPLEMENTATION:
+        return opencl.energy(img)
+    else:
+        height, width = img.shape[:2]
+        energy = np.zeros((height, width))
 
-    for h in range(height):
-        for w in range(width):
-            w_l = max(0, w-1)
-            w_r = min(w+1, width-1)
-            h_u = max(0, h-1)
-            h_d = min(h+1, height-1)
-            energy[h, w] = sum(abs(img[h_u, w, :] - img[h_d, w, :])) + \
-                           sum(abs(img[h, w_l, :] - img[h, w_r, :]))
-    return energy
+        for h in range(height):
+            for w in range(width):
+                w_l = max(0, w-1)
+                w_r = min(w+1, width-1)
+                h_u = max(0, h-1)
+                h_d = min(h+1, height-1)
+                energy[h, w] = sum(abs(img[h_u, w, :] - img[h_d, w, :])) + \
+                               sum(abs(img[h, w_l, :] - img[h, w_r, :]))
+        return energy
 
 
 def find_seam_vertical(energy):
@@ -276,6 +280,46 @@ def seam_carve(img, dw=0, dh=0):
         return img_map[-1, -1], None, None
 
 
+class PyOpenCLDriver:
+    def __init__(self):
+        self.ctx = cl.create_some_context()
+        self.queue = cl.CommandQueue(self.ctx)
+        self.program = None
+
+    def loadProgram(self, filename):
+        f = open(filename, 'r')
+        f_str = "".join(f.readlines())
+        self.program = cl.Program(self.ctx, f_str).build()
+
+    def energy(self, img):
+        mf = cl.mem_flags
+
+        H, W, D = map(np.int32, img.shape)
+        img = img.astype(np.float32).reshape(-1)
+        res = np.empty(img.shape).astype(np.float32)
+
+        self.img_buf = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=img)
+        self.res_buf = cl.Buffer(self.ctx, mf.WRITE_ONLY, res.nbytes)
+
+        self.program.energy(self.queue, img.shape, None, self.img_buf, self.res_buf, H, W, D)
+        cl.enqueue_read_buffer(self.queue, self.res_buf, res).wait()
+
+        res = res.reshape((H, W, D))
+        return np.sum(res, axis=2)
+
+
+#
+#   Settings
+#
+USE_PYOPENCL_IMPLEMENTATION = True
+PLOT_RESULTS = False
+os.environ["PYOPENCL_CTX"] = "0:1"
+os.environ["PYOPENCL_COMPILER_OUTPUT"] = "1"
+
+opencl = PyOpenCLDriver()
+opencl.loadProgram("get_energy.cl")
+
+
 if __name__ == "__main__":
     FILE = os.path.join('img', 'nature_512.png')
     image = mpimg.imread(FILE)
@@ -286,8 +330,9 @@ if __name__ == "__main__":
     print("\rFinal image shape:", image.shape)
 
     # plot
-    #H, W = original.shape[:2]
-    #show_image(1, original, "Original", H, W)
-    #show_image(2, eng, "Energy plot", H, W, path)
-    #show_image(3, image, "Seam carving", H, W)
-    #plt.show()
+    if PLOT_RESULTS:
+        H, W = original.shape[:2]
+        show_image(1, original, "Original", H, W)
+        #show_image(2, eng, "Energy plot", H, W, path)
+        show_image(3, image, "Seam carving", H, W)
+        plt.show()
