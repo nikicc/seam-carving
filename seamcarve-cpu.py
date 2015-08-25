@@ -206,14 +206,14 @@ def seam_carve(img, dw=0, dh=0):
     if dh == 0 and dw == 0:
         return img, None, None
     elif dw == 0:   # remove just horizontal seams
-        final = dh+1
-        for i in range(dh+1):
+        final = dh
+        for i in range(dh):
             img, eng, path, _ = shrink_height(img)
             update_progress()
         return img, eng, path
     elif dh == 0:   # remove just vertical seams
-        final = dw+1
-        for i in range(dw+1):
+        final = dw
+        for i in range(dw):
             img, eng, path, _ = shrink_width(img)
             update_progress()
         return img, eng, path
@@ -286,8 +286,8 @@ if __name__ == "__main__":
     print("\rFinal image shape:", image.shape)
 
     # plot
-    H, W = original.shape[:2]
-    show_image(1, original, "Original", H, W)
+    #H, W = original.shape[:2]
+    #show_image(1, original, "Original", H, W)
     #show_image(2, eng, "Energy plot", H, W, path)
-    show_image(3, image, "Seam carving", H, W)
-    plt.show()
+    #show_image(3, image, "Seam carving", H, W)
+    #plt.show()

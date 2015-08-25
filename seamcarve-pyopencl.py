@@ -36,21 +36,21 @@ def get_energy_image(img):
     :param img: Input image
     :return: The discrete derivatives for each pixel.
     """
-    #height, width = img.shape[:2]
-    #energy = np.zeros((height, width))
+    """
+    height, width = img.shape[:2]
+    energy = np.zeros((height, width))
 
-    #for h in range(height):
-    #    for w in range(width):
-    #        w_l = max(0, w-1)
-    #        w_r = min(w+1, width-1)
-    #        h_u = max(0, h-1)
-    #        h_d = min(h+1, height-1)
-    #        energy[h, w] = sum(abs(img[h_u, w, :] - img[h_d, w, :])) + \
-    #                       sum(abs(img[h, w_l, :] - img[h, w_r, :]))
-
-    example = OpenCL()
-    example.loadProgram("get_energy.cl")
+    for h in range(height):
+        for w in range(width):
+            w_l = max(0, w-1)
+            w_r = min(w+1, width-1)
+            h_u = max(0, h-1)
+            h_d = min(h+1, height-1)
+            energy[h, w] = sum(abs(img[h_u, w, :] - img[h_d, w, :])) + \
+                           sum(abs(img[h, w_l, :] - img[h, w_r, :]))
+    """
     r = example.opencl_energy(img)
+    #assert np.allclose(energy, r)
     return r
 
 
@@ -285,54 +285,35 @@ class OpenCL:
     def __init__(self):
         self.ctx = cl.create_some_context()
         self.queue = cl.CommandQueue(self.ctx)
+        self.program = None
 
     def loadProgram(self, filename):
-        #read in the OpenCL source file as a string
         f = open(filename, 'r')
-        fstr = "".join(f.readlines())
-        #create the program
-        self.program = cl.Program(self.ctx, fstr).build()
-
-    def popCorn(self):
-        mf = cl.mem_flags
-
-        #initialize client side (CPU) arrays
-        self.a = np.array(range(10), dtype=np.float32)
-        self.b = np.array(range(10), dtype=np.float32)
-
-        #create OpenCL buffers
-        self.a_buf = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=self.a)
-        self.b_buf = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=self.b)
-        self.dest_buf = cl.Buffer(self.ctx, mf.WRITE_ONLY, self.b.nbytes)
-
-    def execute(self):
-        self.program.part1(self.queue, self.a.shape, None, self.a_buf, self.b_buf, self.dest_buf)
-        c = np.empty_like(self.a)
-        cl.enqueue_read_buffer(self.queue, self.dest_buf, c).wait()
-        print("a", self.a)
-        print("b", self.b)
-        print("c", c)
+        f_str = "".join(f.readlines())
+        self.program = cl.Program(self.ctx, f_str).build()
 
     def opencl_energy(self, img):
         mf = cl.mem_flags
 
-        self.W = img.shape[1]
-        self.H = img.shape[0]
+        H, W, D = map(np.int32, img.shape)
+        img = img.astype(np.float32).reshape(-1)
+        res = np.empty(img.shape).astype(np.float32)
 
-        self.img = img.astype(np.float32).reshape(-1)
+        self.img_buf = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=img)
+        self.res_buf = cl.Buffer(self.ctx, mf.WRITE_ONLY, res.nbytes)
 
-        self.img_buf = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=self.img)
-        self.dest_buf = cl.Buffer(self.ctx, mf.WRITE_ONLY, self.img.nbytes)
+        self.program.energy(self.queue, img.shape, None, self.img_buf, self.res_buf, H, W, D)
+        cl.enqueue_read_buffer(self.queue, self.res_buf, res).wait()
 
-        self.program.part1(self.queue, self.img.shape, None, self.img_buf, self.dest_buf, np.int32(self.H), np.int32(self.W))
-        c = np.empty(self.img.shape).astype(np.float32)
-        cl.enqueue_read_buffer(self.queue, self.dest_buf, c).wait()
-        c = c.reshape((self.H, self.W, 4))
-        return c[:, :, 0] + c[:, :, 1] + c[:, :, 2] + c[:, :, 3]
+        res = res.reshape((H, W, D))
+        return np.sum(res, axis=2)
 
 
 os.environ["PYOPENCL_CTX"] = "0:1"
 os.environ["PYOPENCL_COMPILER_OUTPUT"] = "1"
+
+example = OpenCL()
+example.loadProgram("get_energy.cl")
 
 if __name__ == "__main__":
     FILE = os.path.join('img', 'nature_512.png')
@@ -344,8 +325,8 @@ if __name__ == "__main__":
     print("\rFinal image shape:", image.shape)
 
     # plot
-    H, W = original.shape[:2]
-    show_image(1, original, "Original", H, W)
+    #H, W = original.shape[:2]
+    #show_image(1, original, "Original", H, W)
     #show_image(2, eng, "Energy plot", H, W, path)
-    show_image(3, image, "Seam carving", H, W)
-    plt.show()
+    #show_image(3, image, "Seam carving", H, W)
+    #plt.show()

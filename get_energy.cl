@@ -1,33 +1,45 @@
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 #define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 #define ABS(x) ((x)<0 ? -(x) : (x))
+#define LINEAR(h, w, d, H, W, D) (h*(W*D) + w*(D) + d)
 
-__kernel void part1(__global float* img, __global float* results, int height, int width)
+
+__kernel void energy(__global float* img, __global float* res, int H, int W, int D)
 {
-    unsigned int ind = get_global_id(0);
+    // get liner index
+    int index = get_global_id(0);
 
-    unsigned int x = ((ind/4)%height);
-    unsigned int y = (ind/(4*height));
-    unsigned int z = (ind%4);
+    // convert index to 3D coordinates
+    int d = index % D;
+    int h = index / (W*D);
+    int w = (index / D) % W;
 
-    int back = (x*width*4) + (y*4) + z;
+    // sanity check
+    /*
+    int back = LINEAR(h, w, d, H, W, D);
+    if(back==index){
+        res[index] = -42;
+    }
+    */
 
-    int w = x;
-    int h = y;
+    // "border safe" indices
+    int wl = MAX(0, w-1);
+    int wr = MIN(w+1, W-1);
+    int hu = MAX(0, h-1);
+    int hd = MIN(h+1, H-1);
 
-    int w_l = MAX(0, w-1);
-    int w_r = MIN(w+1, width-1);
-    int h_u = MAX(0, h-1);
-    int h_d = MIN(h+1, height-1);
-
+    // derivative value
     float der = 0;
-    int back_left = (w_l*width*4) + (y*4) + z;
-    int back_right = (w_r*width*4) + (y*4) + z;
-    der += ABS(img[back_left] - img[back_right]);
 
-    int back_up = (x*width*4) + (h_u*4) + z;
-    int back_down = (x*width*4) + (h_d*4) + z;
-    der += ABS(img[back_up] - img[back_down]);
+    // left-right
+    int bl = LINEAR(h, wl, d, H, W, D);
+    int br = LINEAR(h, wr, d, H, W, D);
+    der += ABS(img[bl] - img[br]);
 
-    results[back] = der;
+    // up-down
+    int bu = LINEAR(hu, w, d, H, W, D);
+    int bd = LINEAR(hd, w, d, H, W, D);
+    der += ABS(img[bu] - img[bd]);
+
+    res[index] = der;
 }
