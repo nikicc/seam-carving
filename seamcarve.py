@@ -318,6 +318,9 @@ def seam_carve(img, dw=0, dh=0):
                     img_map[ih, iw] = current_V
                     backtrace[ih, iw] = REMOVE_VERTICAL
                     eng, path = eng_V, path_V
+
+            # clear previous line of images
+            img_map[ih-1, :] = None
         return img_map[-1, -1], eng, path
 
 
@@ -382,7 +385,7 @@ SEAM_SEARCH_TIMES = []  # For time measurements
 
 opencl = PyOpenCLDriver()
 opencl.load_program("get_energy.cl")
-os.environ["PYOPENCL_CTX"] = "0:1"  # Select the device on which to run OpenCL
+os.environ["PYOPENCL_CTX"] = "0:0"  # Select the device on which to run OpenCL
 os.environ["PYOPENCL_COMPILER_OUTPUT"] = "1"
 print("Using: {}".format("PyOpenCL" if USE_PYOPENCL else "single CPU"))
 
@@ -390,8 +393,13 @@ print("Using: {}".format("PyOpenCL" if USE_PYOPENCL else "single CPU"))
 if __name__ == "__main__":
     image = mpimg.imread(os.path.join('img', 'nature_1024.png'))
     original = np.copy(image)
+
+    # delta height, delta width
+    DW = 50
+    DH = 0
+
     t0 = time.time()
-    image, energy, path = seam_carve(image, dw=1, dh=0)
+    image, energy, path = seam_carve(image, dw=DW, dh=DH)
     t1 = time.time()
 
     print("Image shape:\n\t- original:\t\t{}\n\t- seam-carved:\t{}".format(
@@ -406,11 +414,19 @@ if __name__ == "__main__":
         len(SEAM_SEARCH_TIMES),
         t1-t0))
 
-    # save image
+    # save energy plot
     #c = np.max(energy)+1
     #for y, x in path:
-    #    energy[y, x-1:x+1] = c
-    #mpimg.imsave(os.path.join('report', 'img', 'one-seam.png'), energy)
+    #    energy[y, x-1:x+2] = c
+    #mpimg.imsave(os.path.join('results', 'energy-plot.png'), energy)
+
+    # save smaller image, fill removed parts with white
+    #white = np.ones(image.shape)[:, :DW, :]
+    #image = np.hstack((image, white))
+    #white = np.ones(image.shape)[:DH, :, :]
+    #image = np.vstack((image, white))
+    #mpimg.imsave(os.path.join('results', 'nature_1024-{}w-{}h.png'.
+    #                          format(DW, DH)), image)
 
     # plot
     if PLOT_RESULTS:
