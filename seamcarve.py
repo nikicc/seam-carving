@@ -92,7 +92,7 @@ def find_seam_vertical(energy):
         for h in range(1, height):
             M[h, :], backtrace[h, :] = opencl.find_seam(M[h-1, :], energy[h, :])
     else:
-        backtrace[:, 0] = 1     # since first column does not have element to the left
+        backtrace[:, 0] = 1     # since first column has no element to the left
         for h in range(1, height):
             for w in range(width):
                 w_l = max(0, w-1)
@@ -171,7 +171,9 @@ def remove_one_seam_from_image(img, trace, horizontal):
     :param horizontal: Whether we remove horizontal or vertical seam.
     :return: Smaller image, the cost of reduction.
     """
-    if horizontal:    # dirty hack, since reshaping does only work this way, otherwise the image is corrupted
+    # dirty hack, since reshaping does only work this way,
+    # otherwise the image is corrupted
+    if horizontal:
         img = img.swapaxes(0, 1)
         trace = [(x, y) for y, x in trace]
 
@@ -265,9 +267,9 @@ def seam_carve(img, dw=0, dh=0):
         REMOVE_VERTICAL = '<'
 
         # init
-        img_map = np.zeros((dh+1, dw+1), dtype=object)      # used to store images
-        backtrace = np.zeros((dh+1, dw+1), dtype=object)    # used to backtrack ream removal order
-        T = np.zeros((dh+1, dw+1))                          # used to store the cost of optimal removal order
+        img_map = np.zeros((dh+1, dw+1), dtype=object)      # store images
+        backtrace = np.zeros((dh+1, dw+1), dtype=object)    # backtrack order
+        T = np.zeros((dh+1, dw+1))                          # optimal cost
 
         # store the initial image
         img_map[0, 0] = img
@@ -337,7 +339,8 @@ class PyOpenCLDriver:
         img = img.astype(np.float32).reshape(-1)
         res = np.empty_like(img)
 
-        img_buf = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=img)
+        img_buf = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR,
+                            hostbuf=img)
         res_buf = cl.Buffer(self.ctx, mf.WRITE_ONLY, res.nbytes)
 
         self.program.energy(self.queue, img.shape, None,
@@ -357,7 +360,8 @@ class PyOpenCLDriver:
         back = np.empty_like(m)
 
         m_buf = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=m)
-        energy_buf = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=energy)
+        energy_buf = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR,
+                               hostbuf=energy)
         new_m_buf = cl.Buffer(self.ctx, mf.WRITE_ONLY, new_m.nbytes)
         back_buf = cl.Buffer(self.ctx, mf.WRITE_ONLY, back.nbytes)
 
@@ -371,8 +375,8 @@ class PyOpenCLDriver:
 #
 #   Settings
 #
-USE_PYOPENCL = True     # If False, use pure python single-thread implementation, else use PyOpenCL
-PLOT_RESULTS = True     # If True the results are also shown.
+USE_PYOPENCL = True     # If False, use python, else use PyOpenCL
+PLOT_RESULTS = True     # If True the results are also shown
 ENERGY_CALC_TIMES = []  # For time measurements
 SEAM_SEARCH_TIMES = []  # For time measurements
 
@@ -387,7 +391,7 @@ if __name__ == "__main__":
     image = mpimg.imread(os.path.join('img', 'nature_1024.png'))
     original = np.copy(image)
     t0 = time.time()
-    image, energy, path = seam_carve(image, dw=5, dh=5)
+    image, energy, path = seam_carve(image, dw=1, dh=0)
     t1 = time.time()
 
     print("Image shape:\n\t- original:\t\t{}\n\t- seam-carved:\t{}".format(
@@ -401,6 +405,12 @@ if __name__ == "__main__":
         sum(SEAM_SEARCH_TIMES)/len(SEAM_SEARCH_TIMES),
         len(SEAM_SEARCH_TIMES),
         t1-t0))
+
+    # save image
+    #c = np.max(energy)+1
+    #for y, x in path:
+    #    energy[y, x-1:x+1] = c
+    #mpimg.imsave(os.path.join('report', 'img', 'one-seam.png'), energy)
 
     # plot
     if PLOT_RESULTS:

@@ -4,7 +4,8 @@
 #define LINEAR(h, w, d, H, W, D) (h*(W*D) + w*(D) + d)
 
 
-__kernel void energy(__global float* img, __global float* res, int H, int W, int D)
+__kernel void energy(__global float* img, __global float* res,
+                     int H, int W, int D)
 {
     // get liner index
     int index = get_global_id(0);
@@ -44,7 +45,8 @@ __kernel void energy(__global float* img, __global float* res, int H, int W, int
     res[index] = der;
 }
 
-__kernel void find_seam(__global float* m, __global float* energy, __global float* new_m, __global float* back, int W)
+__kernel void find_seam(__global float* m, __global float* energy,
+                        __global float* new_m, __global float* back, int W)
 {
     // get index
     int w = get_global_id(0);
